@@ -1,9 +1,8 @@
 pipeline {
     agent any
-    
+
     environment {
-        DOCKER_CREDENTIALS = 'docker-hub'
-        IMAGE = "lalithaditya07/auth-service"
+        DOCKER_USER = credentials('docker-hub')
     }
 
     stages {
@@ -14,22 +13,38 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build Auth Docker Image') {
             steps {
                 script {
-                    sh 'docker build -t $IMAGE:latest ./auth-service'
+                    sh "docker build -t ${DOCKER_USER}/auth-service:latest ./auth-service"
                 }
             }
         }
 
-        stage('Push to Docker Hub') {
+        stage('Push Auth to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    script {
+                        sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
+                        sh "docker push ${DOCKER_USER}/auth-service:latest"
+                    }
+                }
+            }
+        }
+
+        stage('Build Frontend Docker Image') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh """
-                            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                            docker push $IMAGE:latest
-                        """
+                    sh "docker build -t ${DOCKER_USER}/frontend:latest ./frontend"
+                }
+            }
+        }
+
+        stage('Push Frontend to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    script {
+                        sh "docker push ${DOCKER_USER}/frontend:latest"
                     }
                 }
             }
@@ -38,7 +53,7 @@ pipeline {
 
     post {
         always {
-            echo "Pipeline completed!"
+            echo 'Pipeline completed!'
         }
     }
 }
